@@ -19,6 +19,7 @@ var (
 	// Pump AMM Program
 	PumpAmmProgramID    = solana.MustPublicKeyFromBase58("pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA")
 	PumpAmmFeeProgramID = PumpFeeProgramID // same as pump fee program
+	FEE_RECIPIENT       = solana.MustPublicKeyFromBase58("62qc2CNXwrYqQScmEdiZFFAnJR262PxWEuNQtxfafNgV")
 )
 
 // Mainnet well-known accounts

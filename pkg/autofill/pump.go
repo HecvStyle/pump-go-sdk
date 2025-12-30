@@ -504,6 +504,83 @@ func pumpAutofillBuy(ctx context.Context, rpc *sdkrpc.Client, user, mint solana.
 	return accts, nil
 }
 
+func pumpEasyBuy(ctx context.Context, user, mint, dev, tokenProgram solana.PublicKey) (pump.BuyAccounts, error) {
+	var accts pump.BuyAccounts
+
+	accts = pump.BuyAccounts{
+		Mint:          mint,
+		User:          user,
+		SystemProgram: constants.SystemProgramID,
+		Program:       pump.ProgramKey,
+		FeeProgram:    constants.PumpFeeProgramID,
+	}
+	// PDAs (non-account dependent)
+	if pk, _, err := pump.DeriveBuyGlobalPDA(accts, pump.BuyArgs{}); err == nil {
+		accts.Global = pk
+	}
+	if pk, _, err := pump.DeriveBuyBondingCurvePDA(accts, pump.BuyArgs{}); err == nil {
+		accts.BondingCurve = pk
+	}
+	if pk, _, err := pump.DeriveBuyEventAuthorityPDA(accts, pump.BuyArgs{}); err == nil {
+		accts.EventAuthority = pk
+	}
+	if pk, _, err := pump.DeriveBuyGlobalVolumeAccumulatorPDA(accts, pump.BuyArgs{}); err == nil {
+		accts.GlobalVolumeAccumulator = pk
+	}
+	if pk, _, err := pump.DeriveBuyUserVolumeAccumulatorPDA(accts, pump.BuyArgs{}); err == nil {
+		accts.UserVolumeAccumulator = pk
+	}
+	if pk, _, err := pump.DeriveBuyFeeConfigPDA(accts, pump.BuyArgs{}); err == nil {
+		accts.FeeConfig = pk
+	}
+
+	// batch fetch required accounts (global, mint, bonding_curve)
+	//addrs := []solana.PublicKey{accts.Global, accts.Mint, accts.BondingCurve}
+	//amap, err := fetchAccountsBatch(ctx, rpc, addrs...)
+	//if err != nil {
+	//	return accts, err
+	//}
+
+	//fixme： 这里应该会是一个固定的值，
+	// parse global for fee recipient
+	//globalAcc := amap[accts.Global.String()]
+	//if globalAcc != nil && globalAcc.Data != nil {
+	//	var globalState pump.Global
+	//	if err := globalState.Unmarshal(globalAcc.Data.GetBinary()); err == nil {
+	//		feeRecipient := firstNonZeroPK(append(globalState.FeeRecipients[:], globalState.FeeRecipient))
+	//		if !isZeroPK(feeRecipient) {
+	//			accts.FeeRecipient = feeRecipient
+	//		}
+	//	}
+	//}
+	//if isZeroPK(accts.FeeRecipient) {
+	//	return accts, fmt.Errorf("fee recipient not found in global config for mint %s", mint)
+	//}
+	//62qc2CNXwrYqQScmEdiZFFAnJR262PxWEuNQtxfafNgV
+	accts.FeeRecipient = constants.FEE_RECIPIENT
+
+	// 铸币的合约，应该是要支持2022
+	accts.TokenProgram = tokenProgram
+
+	// derive user ATA
+	assocUser, _, err := findATAWithProgram(accts.User, accts.Mint, accts.TokenProgram, constants.AssociatedTokenProgramID)
+	if err != nil {
+		return accts, fmt.Errorf("derive user ATA for mint %s: %w", mint, err)
+	}
+	accts.AssociatedUser = assocUser
+
+	// derive AssociatedBondingCurve as ATA(bondingCurve, mint, tokenProgram)
+	assocBC, _, err := findATAWithProgram(accts.BondingCurve, accts.Mint, accts.TokenProgram, constants.AssociatedTokenProgramID)
+	if err != nil {
+		return accts, fmt.Errorf("derive bonding curve ATA for mint %s: %w", mint, err)
+	}
+	accts.AssociatedBondingCurve = assocBC
+
+	// 开发者
+	accts.CreatorVault = dev
+	return accts, nil
+}
+
 func pumpAutofillSell(ctx context.Context, rpc *sdkrpc.Client, user, mint solana.PublicKey) (pump.SellAccounts, error) {
 	var accts pump.SellAccounts
 
