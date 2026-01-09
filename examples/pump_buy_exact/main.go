@@ -62,11 +62,13 @@ func main() {
 	if err := txbuilder.SignTransaction(ctx, tx, signer); err != nil {
 		log.Fatalf("sign: %v", err)
 	}
-	sig, err := builder.Send(ctx, tx)
+	logs, err := builder.SendSimulate(ctx, tx)
 	if err != nil {
 		log.Fatalf("send: %v", err)
 	}
-	fmt.Printf("tx signature: %s\n", sig.String())
+	for _, v := range logs {
+		fmt.Printf(v)
+	}
 	_ = accounts
 	_ = args
 }

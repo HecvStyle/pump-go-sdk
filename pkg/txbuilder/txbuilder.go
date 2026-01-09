@@ -139,6 +139,25 @@ func (b *Builder) Send(ctx context.Context, tx *solana.Transaction) (solana.Sign
 	return b.SendViaRPC(ctx, tx)
 }
 
+func (b *Builder) SendSimulate(ctx context.Context, tx *solana.Transaction) ([]string, error) {
+	if b.client == nil {
+		return nil, fmt.Errorf("rpc client is nil")
+	}
+	//SkipPreflight:       b.skipPreflight,
+	//PreflightCommitment: b.commitment,
+	opts := &solanarpc.SimulateTransactionOpts{
+		SigVerify:              false,
+		Commitment:             b.commitment,
+		ReplaceRecentBlockhash: false,
+		Accounts:               nil,
+	}
+	res, err := b.client.SimulateTransaction(ctx, tx, opts)
+	if err != nil {
+		return nil, fmt.Errorf("send transaction: %w", err)
+	}
+	return res.Value.Logs, nil
+}
+
 // SendViaRPC sends a signed transaction via standard RPC.
 func (b *Builder) SendViaRPC(ctx context.Context, tx *solana.Transaction) (solana.Signature, error) {
 	if b.client == nil {
