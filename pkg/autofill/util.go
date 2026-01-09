@@ -108,6 +108,23 @@ type ensureATABatchResult struct {
 	Balances     map[string]uint64 // key: ATA address string
 }
 
+func buildUserMintATA(ctx context.Context, req ataRequest) ([]solana.Instruction, error) {
+	ata, _, err := findATAWithProgram(req.Wallet, req.Mint, req.TokenProgram, req.ATAProgram)
+	if err != nil {
+		return nil, err
+	}
+	req.ATAAddr = ata
+	metas := []*solana.AccountMeta{
+		solana.NewAccountMeta(req.Payer, true, true),
+		solana.NewAccountMeta(req.ATAAddr, true, false),
+		solana.NewAccountMeta(req.Wallet, false, false),
+		solana.NewAccountMeta(req.Mint, false, false),
+		solana.NewAccountMeta(constants.SystemProgramID, false, false),
+		solana.NewAccountMeta(req.TokenProgram, false, false),
+	}
+	return []solana.Instruction{solana.NewInstruction(req.ATAProgram, metas, nil)}, nil
+}
+
 // ensureATABatch checks multiple ATAs in one batch RPC call and returns create instructions for missing ones.
 func ensureATABatch(ctx context.Context, rpc *sdkrpc.Client, requests []ataRequest) ([]solana.Instruction, error) {
 	result, err := ensureATABatchWithBalances(ctx, rpc, requests)

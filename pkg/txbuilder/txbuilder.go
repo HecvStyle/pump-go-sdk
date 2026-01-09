@@ -148,7 +148,7 @@ func (b *Builder) SendSimulate(ctx context.Context, tx *solana.Transaction) ([]s
 	opts := &solanarpc.SimulateTransactionOpts{
 		SigVerify:              false,
 		Commitment:             b.commitment,
-		ReplaceRecentBlockhash: false,
+		ReplaceRecentBlockhash: true,
 		Accounts:               nil,
 	}
 	res, err := b.client.SimulateTransaction(ctx, tx, opts)

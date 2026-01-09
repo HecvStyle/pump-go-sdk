@@ -191,6 +191,81 @@ func PumpBuyExactSolIn(ctx context.Context, rpc *sdkrpc.Client, user, mint solan
 	return accts, args, instrs, nil
 }
 
+// PumpEasyBuyExactSolIn
+func PumpEasyBuyExactSolIn(ctx context.Context, rpc *sdkrpc.Client, user, mint, dev, program solana.PublicKey, spendableSolIn, minTokensOut uint64, opts ...Option) (pump.BuyExactSolInAccounts, pump.BuyExactSolInArgs, []solana.Instruction, error) {
+	// Input validation
+	if rpc == nil {
+		return pump.BuyExactSolInAccounts{}, pump.BuyExactSolInArgs{}, nil, types.ErrNilRPC
+	}
+	if err := types.ValidatePublicKey("user", user); err != nil {
+		return pump.BuyExactSolInAccounts{}, pump.BuyExactSolInArgs{}, nil, err
+	}
+	if err := types.ValidatePublicKey("mint", mint); err != nil {
+		return pump.BuyExactSolInAccounts{}, pump.BuyExactSolInArgs{}, nil, err
+	}
+	if spendableSolIn == 0 {
+		return pump.BuyExactSolInAccounts{}, pump.BuyExactSolInArgs{}, nil, types.NewValidationError("spendableSolIn", "must be greater than 0")
+	}
+
+	options := &Options{TrackVolume: true}
+	for _, opt := range opts {
+		opt(options)
+	}
+	baseAccts, err := pumpEasyBuy(ctx, user, mint, dev, program)
+	if err != nil {
+		return pump.BuyExactSolInAccounts{}, pump.BuyExactSolInArgs{}, nil, err
+	}
+	applyOverrides(&baseAccts, options.Overrides)
+
+	accts := pump.BuyExactSolInAccounts{
+		Global:                  baseAccts.Global,
+		FeeRecipient:            baseAccts.FeeRecipient,
+		Mint:                    baseAccts.Mint,
+		BondingCurve:            baseAccts.BondingCurve,
+		AssociatedBondingCurve:  baseAccts.AssociatedBondingCurve,
+		AssociatedUser:          baseAccts.AssociatedUser,
+		User:                    baseAccts.User,
+		SystemProgram:           baseAccts.SystemProgram,
+		TokenProgram:            baseAccts.TokenProgram,
+		CreatorVault:            baseAccts.CreatorVault,
+		EventAuthority:          baseAccts.EventAuthority,
+		Program:                 baseAccts.Program,
+		GlobalVolumeAccumulator: baseAccts.GlobalVolumeAccumulator,
+		UserVolumeAccumulator:   baseAccts.UserVolumeAccumulator,
+		FeeConfig:               baseAccts.FeeConfig,
+		FeeProgram:              baseAccts.FeeProgram,
+	}
+
+	args := pump.BuyExactSolInArgs{
+		SpendableSolIn: spendableSolIn,
+		MinTokensOut:   minTokensOut,
+		TrackVolume: pump.OptionBool{
+			Field0: options.TrackVolume,
+		},
+	}
+	//创建user-mint 的ata,因为是尽早买入，所以不去查询 mint-boundingCourve 的信息
+	userMintAtaReqs := ataRequest{Payer: accts.User, Wallet: accts.User, Mint: accts.Mint, TokenProgram: accts.TokenProgram, ATAProgram: constants.AssociatedTokenProgramID}
+	instrs, err := buildUserMintATA(ctx, userMintAtaReqs)
+	if err != nil {
+		return pump.BuyExactSolInAccounts{}, pump.BuyExactSolInArgs{}, nil, err
+	}
+
+	ix, err := pump.BuildBuyExactSolIn(accts, args)
+	if err != nil {
+		return pump.BuyExactSolInAccounts{}, pump.BuyExactSolInArgs{}, nil, err
+	}
+	instrs = append(instrs, ix)
+	// Finalize: prepend Compute Budget, append Jito tip
+	instrs = finalizeInstructionsPump(instrs, user, options)
+	if options.Preview != nil {
+		_ = json.NewEncoder(options.Preview).Encode(struct {
+			Accounts pump.BuyExactSolInAccounts `json:"accounts"`
+			Args     pump.BuyExactSolInArgs     `json:"args"`
+		}{accts, args})
+	}
+	return accts, args, instrs, nil
+}
+
 // PumpSell constructs a pump sell instruction with auto-filled accounts.
 //
 // Parameters:
@@ -577,7 +652,9 @@ func pumpEasyBuy(ctx context.Context, user, mint, dev, tokenProgram solana.Publi
 	accts.AssociatedBondingCurve = assocBC
 
 	// 开发者
-	accts.CreatorVault = dev
+	if pk, _, err := solana.FindProgramAddress([][]byte{[]byte(constants.SeedCreatorVault), dev[:]}, pump.ProgramKey); err == nil {
+		accts.CreatorVault = pk
+	}
 	return accts, nil
 }
 

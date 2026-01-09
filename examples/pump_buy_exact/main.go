@@ -22,7 +22,7 @@ func main() {
 	ctx := context.Background()
 
 	const (
-		mintStr      = "8GT663BCnPZ1nLFkFynZzquy3WGS9gMkugFtNKcrpump"
+		mintStr      = "9PHN8hqogwssrHvC3K9UdWxz6o5H9FJaQJpjYHc9pump"
 		spendableSol = uint64(4_000_000) // 允许花费的 SOL（lamports）
 		minTokensOut = uint64(1)         // 至少获得的 token 数量（最小单位）
 		rpcURL       = rpc.MainNetBeta_RPC
@@ -41,7 +41,7 @@ func main() {
 	cfg.RPCURL = rpcURL
 	cfg.Timeout = 20 * time.Second
 	client := sdkrpc.NewClient(cfg)
-	builder := txbuilder.NewBuilder(client, rpc.CommitmentConfirmed)
+	builder := txbuilder.NewBuilder(client, rpc.CommitmentProcessed)
 
 	// 签名者
 	signer, err := wallet.NewLocalFromBase58(privateKeyB58)
@@ -50,7 +50,9 @@ func main() {
 	}
 	user := signer.PublicKey()
 
-	accounts, args, instrs, err := autofill.PumpBuyExactSolIn(ctx, client, user, mint, spendableSol, minTokensOut)
+	dev := solana.MustPublicKeyFromBase58("BRFWRdf7ccq4pGnbyemruJUn7fkTL2kvekmJeoqspqX6")
+	program := solana.MustPublicKeyFromBase58("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
+	accounts, args, instrs, err := autofill.PumpEasyBuyExactSolIn(ctx, client, user, mint, dev, program, spendableSol, minTokensOut)
 	if err != nil {
 		log.Fatalf("autofill/build ix: %v", err)
 	}
@@ -67,7 +69,7 @@ func main() {
 		log.Fatalf("send: %v", err)
 	}
 	for _, v := range logs {
-		fmt.Printf(v)
+		fmt.Println(v)
 	}
 	_ = accounts
 	_ = args
