@@ -58,7 +58,8 @@ func main() {
 	if err != nil || mintInfo == nil || mintInfo.Value == nil {
 		log.Fatalf("fetch mint info: %v", err)
 	}
-	tokenProgram := mintInfo.Value.Owner
+	dev := solana.MustPublicKeyFromBase58("BRFWRdf7ccq4pGnbyemruJUn7fkTL2kvekmJeoqspqX6")
+	tokenProgram := solana.MustPublicKeyFromBase58("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
 	// 读取用户持有的 base 余额，全部卖出
 	userBaseATA, _, err := solana.FindProgramAddress(
@@ -91,7 +92,9 @@ func main() {
 		args = argsBase
 		ixSend = ixBase
 	} else {
-		accts, argsCalced, instrs, err := autofill.PumpSellWithSlippage(ctx, client, signer.PublicKey(), mint, baseIn, slippageBps)
+
+		//TODO: 这里可以测试卖出，注意更换参数
+		accts, argsCalced, instrs, err := autofill.PumpEasySellWithNoSlippage(ctx, signer.PublicKey(), mint, dev, tokenProgram, baseIn)
 		if err != nil {
 			log.Fatalf("sell with slippage: %v", err)
 		}

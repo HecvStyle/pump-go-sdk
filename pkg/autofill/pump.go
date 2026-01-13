@@ -414,6 +414,103 @@ func PumpSellWithSlippage(ctx context.Context, rpc *sdkrpc.Client, user, mint so
 	return accts, args, instrs, nil
 }
 
+// PumpEasySellWithNoSlippage
+
+func PumpEasySellWithNoSlippage(ctx context.Context, user, mint, dev, tokenProgram solana.PublicKey, amount uint64, opts ...Option) (pump.SellAccounts, pump.SellArgs, []solana.Instruction, error) {
+	if err := types.ValidatePublicKey("user", user); err != nil {
+		return pump.SellAccounts{}, pump.SellArgs{}, nil, err
+	}
+	if err := types.ValidatePublicKey("mint", mint); err != nil {
+		return pump.SellAccounts{}, pump.SellArgs{}, nil, err
+	}
+	if amount == 0 {
+		return pump.SellAccounts{}, pump.SellArgs{}, nil, types.NewValidationError("amount", "must be greater than 0")
+	}
+
+	options := &Options{}
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	accts, _, err := PumpEasySell(ctx, user, mint, dev, tokenProgram, amount, 0, opts...)
+	if err != nil {
+		return pump.SellAccounts{}, pump.SellArgs{}, nil, err
+	}
+
+	// 用户和代币的关联
+	userMintAtaReqs := ataRequest{Payer: accts.User, Wallet: accts.User, Mint: accts.Mint, TokenProgram: accts.TokenProgram, ATAProgram: constants.AssociatedTokenProgramID}
+	instrs, err := buildUserMintATA(ctx, userMintAtaReqs)
+	if err != nil {
+		return pump.SellAccounts{}, pump.SellArgs{}, nil, err
+	}
+
+	// 我的卖出属于狙击，不需要考虑滑点
+	minSol := uint64(0)
+
+	args := pump.SellArgs{
+		Amount:       amount,
+		MinSolOutput: minSol,
+	}
+	ix, err := pump.BuildSell(accts, args)
+	if err != nil {
+		return pump.SellAccounts{}, pump.SellArgs{}, nil, err
+	}
+	instrs = append(instrs, ix)
+
+	// Close ATA only if explicitly requested
+	if options.CloseBaseATA {
+		instrs = append(instrs, buildCloseAccount(accts.AssociatedUser, user, user, accts.TokenProgram))
+	}
+	// Finalize: prepend Compute Budget, append Jito tip
+	instrs = finalizeInstructionsPump(instrs, user, options)
+
+	if options.Preview != nil {
+		_ = json.NewEncoder(options.Preview).Encode(struct {
+			Accounts pump.SellAccounts `json:"accounts"`
+			Args     pump.SellArgs     `json:"args"`
+		}{accts, args})
+	}
+	return accts, args, instrs, nil
+}
+
+func PumpEasySell(ctx context.Context, user, mint, dev, tokenProgram solana.PublicKey, amount, minSol uint64, opts ...Option) (pump.SellAccounts, pump.SellArgs, error) {
+	// Input validation
+	if err := types.ValidatePublicKey("user", user); err != nil {
+		return pump.SellAccounts{}, pump.SellArgs{}, err
+	}
+	if err := types.ValidatePublicKey("mint", mint); err != nil {
+		return pump.SellAccounts{}, pump.SellArgs{}, err
+	}
+	if amount == 0 {
+		return pump.SellAccounts{}, pump.SellArgs{}, types.NewValidationError("amount", "must be greater than 0")
+	}
+
+	options := &Options{}
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	accts, err := pumpEasyFillSell(ctx, user, mint, dev, tokenProgram)
+	if err != nil {
+		return pump.SellAccounts{}, pump.SellArgs{}, err
+	}
+
+	applyOverrides(&accts, options.Overrides)
+
+	args := pump.SellArgs{
+		Amount:       amount,
+		MinSolOutput: minSol,
+	}
+
+	if options.Preview != nil {
+		_ = json.NewEncoder(options.Preview).Encode(struct {
+			Accounts pump.SellAccounts `json:"accounts"`
+			Args     pump.SellArgs     `json:"args"`
+		}{accts, args})
+	}
+	return accts, args, nil
+}
+
 // BuildAndSend executes the instruction with provided signer/txbuilder.
 func BuildAndSend(ctx context.Context, builder *txbuilder.Builder, signer wallet.Signer, ix solana.Instruction) (solana.Signature, error) {
 	if builder == nil || signer == nil {
@@ -738,6 +835,52 @@ func pumpAutofillSell(ctx context.Context, rpc *sdkrpc.Client, user, mint solana
 		accts.CreatorVault = pk
 	}
 
+	return accts, nil
+}
+
+func pumpEasyFillSell(ctx context.Context, user, mint, dev, tokenProgram solana.PublicKey) (pump.SellAccounts, error) {
+	accts := pump.SellAccounts{
+		Mint:          mint,
+		User:          user,
+		SystemProgram: constants.SystemProgramID,
+		Program:       pump.ProgramKey,
+		FeeProgram:    constants.PumpFeeProgramID,
+	}
+	// PDAs (non-account dependent)
+	if pk, _, err := pump.DeriveSellGlobalPDA(accts, pump.SellArgs{}); err == nil {
+		accts.Global = pk
+	}
+	if pk, _, err := pump.DeriveSellBondingCurvePDA(accts, pump.SellArgs{}); err == nil {
+		accts.BondingCurve = pk
+	}
+	if pk, _, err := pump.DeriveSellEventAuthorityPDA(accts, pump.SellArgs{}); err == nil {
+		accts.EventAuthority = pk
+	}
+	if pk, _, err := pump.DeriveSellFeeConfigPDA(accts, pump.SellArgs{}); err == nil {
+		accts.FeeConfig = pk
+	}
+
+	accts.FeeRecipient = constants.FEE_RECIPIENT
+	accts.TokenProgram = tokenProgram
+
+	// derive user ATA
+	assocUser, _, err := findATAWithProgram(accts.User, accts.Mint, accts.TokenProgram, constants.AssociatedTokenProgramID)
+	if err != nil {
+		return accts, fmt.Errorf("derive user ATA for mint %s: %w", mint, err)
+	}
+	accts.AssociatedUser = assocUser
+
+	// derive AssociatedBondingCurve as ATA(bondingCurve, mint, tokenProgram)
+	assocBC, _, err := findATAWithProgram(accts.BondingCurve, accts.Mint, accts.TokenProgram, constants.AssociatedTokenProgramID)
+	if err != nil {
+		return accts, fmt.Errorf("derive bonding curve ATA for mint %s: %w", mint, err)
+	}
+	accts.AssociatedBondingCurve = assocBC
+
+	// 开发者
+	if pk, _, err := solana.FindProgramAddress([][]byte{[]byte(constants.SeedCreatorVault), dev[:]}, pump.ProgramKey); err == nil {
+		accts.CreatorVault = pk
+	}
 	return accts, nil
 }
 
