@@ -52,7 +52,7 @@ func main() {
 
 	dev := solana.MustPublicKeyFromBase58("BRFWRdf7ccq4pGnbyemruJUn7fkTL2kvekmJeoqspqX6")
 	program := solana.MustPublicKeyFromBase58("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
-	accounts, args, instrs, err := autofill.PumpEasyBuyExactSolIn(ctx, client, user, mint, dev, program, spendableSol, minTokensOut)
+	accounts, args, instrs, err := autofill.PumpEasyBuyExactSolIn(ctx, user, mint, dev, program, spendableSol, minTokensOut)
 	if err != nil {
 		log.Fatalf("autofill/build ix: %v", err)
 	}

@@ -192,11 +192,9 @@ func PumpBuyExactSolIn(ctx context.Context, rpc *sdkrpc.Client, user, mint solan
 }
 
 // PumpEasyBuyExactSolIn
-func PumpEasyBuyExactSolIn(ctx context.Context, rpc *sdkrpc.Client, user, mint, dev, program solana.PublicKey, spendableSolIn, minTokensOut uint64, opts ...Option) (pump.BuyExactSolInAccounts, pump.BuyExactSolInArgs, []solana.Instruction, error) {
+func PumpEasyBuyExactSolIn(ctx context.Context, user, mint, dev, program solana.PublicKey, spendableSolIn, minTokensOut uint64, opts ...Option) (pump.BuyExactSolInAccounts, pump.BuyExactSolInArgs, []solana.Instruction, error) {
 	// Input validation
-	if rpc == nil {
-		return pump.BuyExactSolInAccounts{}, pump.BuyExactSolInArgs{}, nil, types.ErrNilRPC
-	}
+
 	if err := types.ValidatePublicKey("user", user); err != nil {
 		return pump.BuyExactSolInAccounts{}, pump.BuyExactSolInArgs{}, nil, err
 	}
