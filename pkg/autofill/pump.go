@@ -436,11 +436,13 @@ func PumpEasySellWithNoSlippage(ctx context.Context, user, mint, dev, tokenProgr
 	}
 
 	// 用户和代币的关联
-	userMintAtaReqs := ataRequest{Payer: accts.User, Wallet: accts.User, Mint: accts.Mint, TokenProgram: accts.TokenProgram, ATAProgram: constants.AssociatedTokenProgramID}
-	instrs, err := buildUserMintATA(ctx, userMintAtaReqs)
-	if err != nil {
-		return pump.SellAccounts{}, pump.SellArgs{}, nil, err
-	}
+	// 卖出的时候，不需要这个创建ata命令，所以改成空数组
+	//userMintAtaReqs := ataRequest{Payer: accts.User, Wallet: accts.User, Mint: accts.Mint, TokenProgram: accts.TokenProgram, ATAProgram: constants.AssociatedTokenProgramID}
+	//instrs, err := buildUserMintATA(ctx, userMintAtaReqs)
+	//if err != nil {
+	//	return pump.SellAccounts{}, pump.SellArgs{}, nil, err
+	//}
+	instrs := []solana.Instruction{}
 
 	// 我的卖出属于狙击，不需要考虑滑点
 	minSol := uint64(0)
