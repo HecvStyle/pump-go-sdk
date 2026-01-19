@@ -37,3 +37,4 @@ __debug_bin*
 
 # Example config (users should create their own)
 examples/**/config.json
+/examples/
