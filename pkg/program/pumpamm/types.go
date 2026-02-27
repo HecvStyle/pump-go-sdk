@@ -311,9 +311,9 @@ type Shareholder struct {
 }
 
 type SharingConfig struct {
-	Bump         uint8            `bin:"bump"`
-	Version      uint8            `bin:"version"`
-	Status       ConfigStatus     `bin:"status"`
+	Bump    uint8 `bin:"bump"`
+	Version uint8 `bin:"version"`
+	//Status       ConfigStatus     `bin:"status"`
 	Mint         solana.PublicKey `bin:"mint"`
 	Admin        solana.PublicKey `bin:"admin"`
 	AdminRevoked bool             `bin:"admin_revoked"`
