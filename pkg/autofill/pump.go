@@ -778,6 +778,10 @@ func pumpAutofillSell(ctx context.Context, rpc *sdkrpc.Client, user, mint solana
 	if pk, _, err := pump.DeriveSellFeeConfigPDA(accts, pump.SellArgs{}); err == nil {
 		accts.FeeConfig = pk
 	}
+	// UserVolumeAccumulator for cashback (remaining account at index 0)
+	if pk, _, err := pump.DeriveSellUserVolumeAccumulatorPDA(accts, pump.SellArgs{}); err == nil {
+		accts.UserVolumeAccumulator = pk
+	}
 
 	// batch fetch required accounts (global, mint, bonding_curve)
 	addrs := []solana.PublicKey{accts.Global, accts.Mint, accts.BondingCurve}
@@ -858,6 +862,10 @@ func pumpEasyFillSell(ctx context.Context, user, mint, dev, tokenProgram solana.
 	}
 	if pk, _, err := pump.DeriveSellFeeConfigPDA(accts, pump.SellArgs{}); err == nil {
 		accts.FeeConfig = pk
+	}
+	// UserVolumeAccumulator for cashback (remaining account at index 0)
+	if pk, _, err := pump.DeriveSellUserVolumeAccumulatorPDA(accts, pump.SellArgs{}); err == nil {
+		accts.UserVolumeAccumulator = pk
 	}
 
 	accts.FeeRecipient = constants.FEE_RECIPIENT
@@ -1290,9 +1298,9 @@ func pumpAutofillCreateV2(ctx context.Context, rpc *sdkrpc.Client, user, mint so
 	}
 
 	// Derive MayhemTokenVault PDA
-	if pk, _, err := pump.DeriveCreateV2MayhemTokenVaultPDA(accts, pump.CreateV2Args{}); err == nil {
-		accts.MayhemTokenVault = pk
-	}
+	//if pk, _, err := pump.DeriveCreateV2MayhemTokenVaultPDA(accts, pump.CreateV2Args{}); err == nil {
+	//	accts.MayhemTokenVault = pk
+	//}
 
 	// Derive AssociatedBondingCurve (ATA using Token-2022)
 	assocBC, _, err := findATAWithProgram(accts.BondingCurve, mint, constants.Token2022ProgramID, constants.AssociatedTokenProgramID)
@@ -1322,4 +1330,76 @@ func finalizeInstructionsPump(instrs []solana.Instruction, from solana.PublicKey
 		instrs = append(instrs, tipIx)
 	}
 	return instrs
+}
+
+// ========================================
+// Cashback Functions
+// ========================================
+
+// PumpClaimCashback claims cashback rewards from the Pump bonding curve program.
+//
+// Cashback is stored as native lamports in the UserVolumeAccumulator account.
+// This instruction transfers the cashback to the user's wallet.
+//
+// Parameters:
+//   - ctx: context for RPC calls
+//   - rpc: RPC client wrapper
+//   - user: user's public key (will receive the cashback)
+//   - opts: optional configurations
+//
+// Returns:
+//   - ClaimCashbackAccounts: auto-filled account addresses
+//   - ClaimCashbackArgs: instruction arguments (empty)
+//   - []Instruction: instructions to execute
+//   - error: validation or RPC errors
+//
+// Example:
+//
+//	accts, args, instrs, err := autofill.PumpClaimCashback(ctx, rpc, user)
+func PumpClaimCashback(ctx context.Context, rpc *sdkrpc.Client, user solana.PublicKey, opts ...Option) (pump.ClaimCashbackAccounts, pump.ClaimCashbackArgs, []solana.Instruction, error) {
+	if rpc == nil {
+		return pump.ClaimCashbackAccounts{}, pump.ClaimCashbackArgs{}, nil, types.ErrNilRPC
+	}
+	if err := types.ValidatePublicKey("user", user); err != nil {
+		return pump.ClaimCashbackAccounts{}, pump.ClaimCashbackArgs{}, nil, err
+	}
+
+	options := &Options{}
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	accts := pump.ClaimCashbackAccounts{
+		User:    user,
+		Program: pump.ProgramKey,
+	}
+
+	// Derive UserVolumeAccumulator PDA
+	if pk, _, err := pump.DeriveClaimCashbackUserVolumeAccumulatorPDA(accts, pump.ClaimCashbackArgs{}); err == nil {
+		accts.UserVolumeAccumulator = pk
+	}
+
+	// Derive EventAuthority PDA
+	if pk, _, err := pump.DeriveClaimCashbackEventAuthorityPDA(accts, pump.ClaimCashbackArgs{}); err == nil {
+		accts.EventAuthority = pk
+	}
+
+	args := pump.ClaimCashbackArgs{}
+
+	ix, err := pump.BuildClaimCashback(accts, args)
+	if err != nil {
+		return pump.ClaimCashbackAccounts{}, pump.ClaimCashbackArgs{}, nil, err
+	}
+
+	instrs := []solana.Instruction{ix}
+	instrs = finalizeInstructionsPump(instrs, user, options)
+
+	if options.Preview != nil {
+		_ = json.NewEncoder(options.Preview).Encode(struct {
+			Accounts pump.ClaimCashbackAccounts `json:"accounts"`
+			Args     pump.ClaimCashbackArgs     `json:"args"`
+		}{accts, args})
+	}
+
+	return accts, args, instrs, nil
 }
