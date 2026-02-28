@@ -155,6 +155,7 @@ func PumpBuyExactSolIn(ctx context.Context, rpc *sdkrpc.Client, user, mint solan
 		UserVolumeAccumulator:   baseAccts.UserVolumeAccumulator,
 		FeeConfig:               baseAccts.FeeConfig,
 		FeeProgram:              baseAccts.FeeProgram,
+		BondingCurveV2:          baseAccts.BondingCurveV2,
 	}
 
 	args := pump.BuyExactSolInArgs{
@@ -232,6 +233,7 @@ func PumpEasyBuyExactSolIn(ctx context.Context, user, mint, dev, program solana.
 		UserVolumeAccumulator:   baseAccts.UserVolumeAccumulator,
 		FeeConfig:               baseAccts.FeeConfig,
 		FeeProgram:              baseAccts.FeeProgram,
+		BondingCurveV2:          baseAccts.BondingCurveV2,
 	}
 
 	args := pump.BuyExactSolInArgs{
@@ -617,6 +619,10 @@ func pumpAutofillBuy(ctx context.Context, rpc *sdkrpc.Client, user, mint solana.
 		accts.FeeConfig = pk
 	}
 
+	if pk, _, err := pump.DeriveBuyBondingCurveV2PDA(accts, pump.BuyArgs{}); err == nil {
+		accts.BondingCurveV2 = pk
+	}
+
 	// batch fetch required accounts (global, mint, bonding_curve)
 	addrs := []solana.PublicKey{accts.Global, accts.Mint, accts.BondingCurve}
 	amap, err := fetchAccountsBatch(ctx, rpc, addrs...)
@@ -705,6 +711,9 @@ func pumpEasyBuy(ctx context.Context, user, mint, dev, tokenProgram solana.Publi
 	if pk, _, err := pump.DeriveBuyFeeConfigPDA(accts, pump.BuyArgs{}); err == nil {
 		accts.FeeConfig = pk
 	}
+	if pk, _, err := pump.DeriveBuyBondingCurveV2PDA(accts, pump.BuyArgs{}); err == nil {
+		accts.BondingCurveV2 = pk
+	}
 
 	// batch fetch required accounts (global, mint, bonding_curve)
 	//addrs := []solana.PublicKey{accts.Global, accts.Mint, accts.BondingCurve}
@@ -778,9 +787,8 @@ func pumpAutofillSell(ctx context.Context, rpc *sdkrpc.Client, user, mint solana
 	if pk, _, err := pump.DeriveSellFeeConfigPDA(accts, pump.SellArgs{}); err == nil {
 		accts.FeeConfig = pk
 	}
-	// UserVolumeAccumulator for cashback (remaining account at index 0)
-	if pk, _, err := pump.DeriveSellUserVolumeAccumulatorPDA(accts, pump.SellArgs{}); err == nil {
-		accts.UserVolumeAccumulator = pk
+	if pk, _, err := pump.DeriveSellBondingCurveV2PDA(accts, pump.SellArgs{}); err == nil {
+		accts.BondingCurveV2 = pk
 	}
 
 	// batch fetch required accounts (global, mint, bonding_curve)
@@ -864,8 +872,8 @@ func pumpEasyFillSell(ctx context.Context, user, mint, dev, tokenProgram solana.
 		accts.FeeConfig = pk
 	}
 	// UserVolumeAccumulator for cashback (remaining account at index 0)
-	if pk, _, err := pump.DeriveSellUserVolumeAccumulatorPDA(accts, pump.SellArgs{}); err == nil {
-		accts.UserVolumeAccumulator = pk
+	if pk, _, err := pump.DeriveSellBondingCurveV2PDA(accts, pump.SellArgs{}); err == nil {
+		accts.BondingCurveV2 = pk
 	}
 
 	accts.FeeRecipient = constants.FEE_RECIPIENT
