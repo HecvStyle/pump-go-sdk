@@ -22,7 +22,7 @@ func main() {
 	ctx := context.Background()
 
 	const (
-		mintStr      = "9PHN8hqogwssrHvC3K9UdWxz6o5H9FJaQJpjYHc9pump"
+		mintStr      = "6mbTTByRzN5K8drojrRHZ51Vih7LMhN2TwieP39rpump"
 		spendableSol = uint64(4_000_000) // 允许花费的 SOL（lamports）
 		minTokensOut = uint64(1)         // 至少获得的 token 数量（最小单位）
 		rpcURL       = rpc.MainNetBeta_RPC
@@ -50,7 +50,7 @@ func main() {
 	}
 	user := signer.PublicKey()
 
-	dev := solana.MustPublicKeyFromBase58("BRFWRdf7ccq4pGnbyemruJUn7fkTL2kvekmJeoqspqX6")
+	dev := solana.MustPublicKeyFromBase58("FkYZoPvtebiDhDoJGQLXE1BrsaBBVbKsJAL2GHpKGhqW")
 	program := solana.MustPublicKeyFromBase58("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 	accounts, args, instrs, err := autofill.PumpEasyBuyExactSolIn(ctx, user, mint, dev, program, spendableSol, minTokensOut)
 	if err != nil {
